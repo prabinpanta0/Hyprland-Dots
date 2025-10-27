@@ -426,6 +426,15 @@ def extract_place_parts_nominatim(data_dict: JSONDict) -> List[str]:
 
 
 def extract_place_parts_open_meteo(p: JSONDict) -> List[str]:
+    """
+    Build an ordered list of place name components extracted from an Open-Meteo reverse-geocode entry.
+    
+    Parameters:
+        p (JSONDict): A mapping representing an Open-Meteo place object which may contain the keys "name", "admin1", and "country".
+    
+    Returns:
+        List[str]: A list of present place components in order: name, admin1, country (omitting any that are missing).
+    """
     name = cast(Optional[str], p.get("name"))
     admin1 = cast(Optional[str], p.get("admin1"))
     country = cast(Optional[str], p.get("country"))
@@ -644,6 +653,19 @@ def build_aqi_info(aqi: Optional[Dict[str, Any]]) -> str:
 
 
 def build_place_str(lat: float, lon: float, place: Optional[str]) -> str:
+    """
+    Format a location label combining an effective place name (when available) with coordinates.
+    
+    Parameters:
+        lat (float): Latitude used in the label, formatted to three decimal places.
+        lon (float): Longitude used in the label, formatted to three decimal places.
+        place (Optional[str]): Place name provided by the caller; used only if MANUAL_PLACE and ENV_PLACE are not set.
+    
+    Returns:
+        str: If an effective place name is available (MANUAL_PLACE, then ENV_PLACE, then `place`), returns
+        "effective_place (lat, lon)" with coordinates rounded to three decimals; otherwise returns
+        "lat, lon" with coordinates rounded to three decimals.
+    """
     effective_place = MANUAL_PLACE or ENV_PLACE or place
     if effective_place:
         return f"{effective_place} ({lat:.3f}, {lon:.3f})"
@@ -738,6 +760,22 @@ def gather_weather_data(forecast: Optional[Dict[str, Any]], aqi: Optional[Dict[s
 
 
 def build_output(loc: Location, forecast: Optional[Dict[str, Any]], aqi: Optional[Dict[str, Any]]) -> Tuple[Dict[str, str], str]:
+    """
+    Build the UI-ready weather output payload and a plain-text summary for display.
+    
+    Parameters:
+        loc (Location): Location object providing latitude, longitude, and optional place override.
+        forecast (Optional[Dict[str, Any]]): Parsed weather forecast payload (typically from Open-Meteo); may be None.
+        aqi (Optional[Dict[str, Any]]): Parsed air quality payload (European AQI); may be None.
+    
+    Returns:
+        Tuple[Dict[str, str], str]: A tuple where the first element is a mapping used for UI consumption with keys:
+            - "text": short label combining weather icon and current temperature,
+            - "alt": human-readable weather status,
+            - "tooltip": detailed tooltip text (markup or plain, depending on configuration),
+            - "class": CSS-like class string describing WMO code and day/night state;
+        and the second element is a plain multi-line human-readable summary string including place, icon/status, temperature (and feels-like), wind, humidity, visibility, and AQI info.
+    """
     data = gather_weather_data(forecast, aqi)
 
     place_str = build_place_str(loc.lat, loc.lon, loc.place)
@@ -797,6 +835,12 @@ def fetch_fresh_weather(lat: float, lon: float) -> Optional[Tuple[Dict[str, str]
 
 
 def try_stale_weather(lat: float, lon: float) -> Optional[Tuple[Dict[str, str], str]]:
+    """
+    Attempt to load stale cached API weather data for the given coordinates and build the display output.
+    
+    Returns:
+        A tuple `(out_data, simple_weather)` where `out_data` is a JSON-ready mapping with display fields (`text`, `alt`, `tooltip`, `class`) and `simple_weather` is a human-readable multi-line string, or `None` if no usable stale cache is available.
+    """
     try:
         if API_CACHE_PATH.exists():
             with API_CACHE_PATH.open("r", encoding="utf-8") as f:
